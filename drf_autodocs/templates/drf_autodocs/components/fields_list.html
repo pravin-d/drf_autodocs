@@ -1,0 +1,63 @@
+{% load autodocs_filters %}
+<div class="fields-wrapper json-container tab-content">
+{
+<ul class="field-list">
+    {% for field in fields %}
+        {% if request_fields and not field.read_only or response_fields and not field.write_only %}
+            <li>
+                <span>{{ field.name }}: {{ field.type }}{% if not forloop.last %},{% endif %}</span>
+
+
+                {% if field.required and request_fields %}
+                    <span class="new badge delete" data-badge-caption="">Required</span>
+                {% endif %}
+
+
+                {% if field.help_text %}
+                    <span class="new badge green" data-badge-caption="">
+                        <a class="tooltipped white-text" data-position="bottom" data-delay="50" data-tooltip="{{ field.help_text }}">Help Text</a>
+                    </span>
+                {% endif %}
+
+
+                {% if field.choices %}
+                    <div class="subfields-wrapper">
+                        <span class="new badge green darken-3" data-badge-caption="">Choices</span>
+                        <div class="subfields">
+                            <table class="responsive-table">
+                                <thead>
+                                <tr>
+                                    <th>Value</th>
+                                    <th>Meaning</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for c in field.choices.items %}
+                                    <tr>
+                                        <td>{{ c.0 }}</td>
+                                        <td>{{ c.1|markdownify|keep_formatting }}</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                {% endif %}
+                {% if field.sub_fields %}
+                    <div class="subfields-wrapper">
+                        <span class="new badge red" data-badge-caption="">Item structure</span>
+                        <div class="subfields">
+                            {% if is_response_fields or field.read_only %}
+                                {% include "drf_autodocs/components/fields_list.html" with fields=field.sub_fields is_response_fields=True %}
+                            {% else %}
+                                {% include "drf_autodocs/components/fields_list.html" with fields=field.sub_fields is_response_fields=False %}
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </li>
+        {% endif %}
+    {% endfor %}
+</ul>
+}
+</div>

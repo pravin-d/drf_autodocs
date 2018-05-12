@@ -1,0 +1,5 @@
+include README.md
+include LICENSE
+
+recursive-include drf_autodocs/static *
+recursive-include drf_autodocs/templates *
