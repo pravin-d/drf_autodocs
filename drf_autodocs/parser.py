@@ -52,7 +52,12 @@ class TreeAPIParser(BaseAPIParser):
         for pattern in urlpatterns:
             if isinstance(pattern, RegexURLResolver):
                 try:
-                    regex = pattern._regex if hasattr(pattern, "_regex") else pattern.pattern._regex
+                    if hasattr(pattern, "_regex"):
+                        regex = pattern._regex
+                    elif hasattr(pattern.pattern, "_regex"): 
+                        regex = pattern.pattern._regex
+                    else :
+                        regex = str(pattern.pattern)
                 except:
                     regex = ""
                 child_node_name = simplify_regex(regex).strip('/') if regex else ""
