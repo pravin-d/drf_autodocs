@@ -78,10 +78,14 @@ class Endpoint:
                 self.filter_backends.append((f.__name__, getdoc(f)))
 
     def _get_allowed_methods(self):
+         methods = []
         if hasattr(self.view, 'cls'):
-            return [m.upper() for m in self.view.cls.http_method_names if hasattr(self.view.cls, m)]
-        else:
-            return []
+            methods = [m.upper() for m in self.view.cls.http_method_names if hasattr(self.view.cls, m)]
+
+        if len(methods) and hasattr(self.view, 'actions'):
+            methods = [m.upper() for m in self.view.actions.keys()]
+            print(methods)
+        return methods
 
     @staticmethod
     def _get_complete_path(pattern, prefix=None):
