@@ -145,6 +145,10 @@
                 <h4>Request Fields:</h4>
                 {% if endpoint.input_fields %}
                     {% include 'drf_autodocs/components/fields_list.html' with fields=endpoint.input_fields request_fields=True %}
+                {% elif endpoint.input_fields_text %}
+                    <div class="fields-wrapper json-container tab-content">
+                        <pre>{{endpoint.input_fields_text}}</pre>
+                    </div>
                 {% else %}
                     <h5>No input data specified</h5>
                 {% endif %}
@@ -153,6 +157,10 @@
                 <h4>Response Fields:</h4>
                 {% if endpoint.output_fields %}
                     {% include 'drf_autodocs/components/fields_list.html' with fields=endpoint.output_fields response_fields=True %}
+                {% elif endpoint.output_fields_text %}
+                    <div class="fields-wrapper json-container tab-content">
+                        <pre>{{endpoint.output_fields_text}}</pre>
+                    </div>
                 {% elif endpoint.input_fields %}
                     {% include 'drf_autodocs/components/fields_list.html' with fields=endpoint.input_fields response_fields=True %}
                 {% else %}

@@ -4,17 +4,17 @@ from inspect import getdoc
 from django.contrib.admindocs.views import simplify_regex
 from drf_autodocs import builtin_docs
 from django.conf import settings
-from django.utils.encoding import smart_text
+from django.utils.encoding import force_text, smart_text
 from rest_framework.utils import formatting
 import re
-
 
 class Endpoint:
     counter = 0
 
     def __init__(self, pattern, prefix=None):
-        self.header_regex = re.compile('^[a-zA-Z][0-9A-Za-z_]*:')
         self.id = Endpoint.counter
+        self.header_regex = re.compile('^[a-zA-Z][0-9A-Za-z_]*:')
+        self.extra_method = False
         Endpoint.counter += 1
 
         self.pattern = pattern
@@ -38,31 +38,37 @@ class Endpoint:
 
         self.docstring = self._get_doc()
 
-        if hasattr(self.view.cls, 'serializer_class') and self.view.cls.serializer_class is not None:
-            if not set(self.methods) == {'GET', 'OPTIONS'}:
-                self.input_fields = self._get_serializer_fields(self.view.cls.serializer_class())
-            else:
-                self.output_fields = self._get_serializer_fields(self.view.cls.serializer_class())
+        if hasattr(self.view.cls, 'req_res_autodocs') :
+            self._parse_req_res_doc()
+        else :
+            if hasattr(self.view.cls, 'serializer_class') and self.view.cls.serializer_class is not None:
+                if not set(self.methods) == {'GET', 'OPTIONS'}:
+                    self.input_fields = self._get_serializer_fields(self.view.cls.serializer_class())
+                else:
+                    self.output_fields = self._get_serializer_fields(self.view.cls.serializer_class())
 
-        if hasattr(self.view.cls, 'response_serializer_class'):
-            self.output_fields = self._get_serializer_fields(self.view.cls.response_serializer_class())
+            if hasattr(self.view.cls, 'response_serializer_class'):
+                self.output_fields = self._get_serializer_fields(self.view.cls.response_serializer_class())
 
-    def get_view_description(self, html=False):
-        """
-        Given a view class, return a textual description to represent the view.
-        This name is used in the browsable API, and in OPTIONS responses.
+    def _parse_req_res_doc(self) :
+        if self.extra_method :
+            description = self.get_view_description(self.extra_method)
+        else :
+            description = self.get_view_description(self.view.cls, 'req_res_autodocs')
 
-        This function is the default for the `VIEW_DESCRIPTION_FUNCTION` setting.
-        """
-        description = self.view.cls.__doc__ or "No description provided by developer"
-        description = formatting.dedent(smart_text(description))
-        if html:
-            return formatting.markup_description(description)
-        return description
+        sections = self._parse_docs_to_map(description, self.header_regex)
+        if not set(self.methods) == {'GET', 'OPTIONS'}:
+            self.input_fields_text = ''
+            for method in self.methods:
+                self.input_fields_text += method.upper() + '\n' + sections[method.lower() + '_req']
+        else:
+            self.output_fields_text = ''
+            for method in self.methods:
+                self.output_fields_text += method.upper() + '\n' + sections[method.lower() + '_req']
+        
 
-    def _get_doc(self):
-        description = self.get_view_description()
-        lines = [line.strip() for line in description.splitlines()]
+    def _parse_docs_to_map(self, doc, regex) :
+        lines = [line for line in doc.splitlines()]
         current_section = ''
         sections = {'': ''}
         for line in lines:
@@ -70,10 +76,36 @@ class Endpoint:
                 current_section, seperator, lead = line.partition(':')
                 sections[current_section] = lead.strip()
             else:
-                sections[current_section] += '\n' + line
+                sections[current_section] += '\n' + line.replace('\t', '  ')
+        return sections
 
+    def get_view_description(self, obj, attr='__doc__', html=False):
+        """
+        Get the doc string from either cls or function, parse it and return
+        """
+        description = getattr(obj, "__doc__", "No description provided by developer")
+        description = formatting.dedent(smart_text(description))
+        if html:
+            return formatting.markup_description(description)
+        return description
+
+    def _get_doc(self):
+
+        # Check if the url pattern refers to dynamic routes
+        # One Endpoin for one dynamic route. Need not be the case of others.
         # Check if it has actions - Viewset logic
-        actions_map = getattr(self.view, 'actions', False)        
+        actions_map = getattr(self.view, 'actions', False)
+        if actions_map and len(actions_map.keys()) == 1 :
+            dynamic_method = list(actions_map.values())[0]
+            for m in self.view.cls.get_extra_actions():
+                if m.__name__ == dynamic_method:
+                    self.extra_method = m
+                    break;
+
+        description =  self.get_view_description(self.extra_method) if self.extra_method else self.get_view_description(self.view.cls)
+
+        sections = self._parse_docs_to_map(description, self.header_regex)
+
         if not actions_map :
             actions_map = {m.upper(): getattr(self.view.cls, m) for m in self.view.cls.http_method_names if hasattr(self.view.cls, m)}
         doc = ''
@@ -134,8 +166,9 @@ class Endpoint:
                 regex = str(pattern.pattern)
         except:
             regex = ""
-
-        complete_path = '%s/%s' % (prefix.rstrip('/'), simplify_regex(regex).lstrip('/'))
+        prefix = prefix.rstrip('/')
+        regex = simplify_regex(regex).lstrip('/')
+        complete_path = '%s/%s' % (prefix, regex)
         return complete_path
 
     def _get_serializer_fields(self, serializer):
