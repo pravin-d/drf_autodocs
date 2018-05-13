@@ -4,12 +4,16 @@ from inspect import getdoc
 from django.contrib.admindocs.views import simplify_regex
 from drf_autodocs import builtin_docs
 from django.conf import settings
+from django.utils.encoding import smart_text
+from rest_framework.utils import formatting
+import re
 
 
 class Endpoint:
     counter = 0
 
     def __init__(self, pattern, prefix=None):
+        self.header_regex = re.compile('^[a-zA-Z][0-9A-Za-z_]*:')
         self.id = Endpoint.counter
         Endpoint.counter += 1
 
@@ -43,12 +47,44 @@ class Endpoint:
         if hasattr(self.view.cls, 'response_serializer_class'):
             self.output_fields = self._get_serializer_fields(self.view.cls.response_serializer_class())
 
+    def get_view_description(self, html=False):
+        """
+        Given a view class, return a textual description to represent the view.
+        This name is used in the browsable API, and in OPTIONS responses.
+
+        This function is the default for the `VIEW_DESCRIPTION_FUNCTION` setting.
+        """
+        description = self.view.cls.__doc__ or "No description provided by developer"
+        description = formatting.dedent(smart_text(description))
+        if html:
+            return formatting.markup_description(description)
+        return description
+
     def _get_doc(self):
-        no_description = "No description provided by developer"
-        try:
-            return self.view.cls.__doc__ if self.view.cls.__doc__ is not None else no_description
-        except AttributeError:
-            return no_description
+        description = self.get_view_description()
+        lines = [line.strip() for line in description.splitlines()]
+        current_section = ''
+        sections = {'': ''}
+        for line in lines:
+            if self.header_regex.match(line):
+                current_section, seperator, lead = line.partition(':')
+                sections[current_section] = lead.strip()
+            else:
+                sections[current_section] += '\n' + line
+
+        # Check if it has actions - Viewset logic
+        actions_map = getattr(self.view, 'actions', False)        
+        if not actions_map :
+            actions_map = {m.upper(): getattr(self.view.cls, m) for m in self.view.cls.http_method_names if hasattr(self.view.cls, m)}
+        doc = ''
+        # TODO: Check for View based route
+        for method_name, method in actions_map.items() :
+            if not type(method) is str :
+                method = method_name
+            if method in sections:
+                doc += method_name.upper() + '\n' + sections[method].strip() + '\n\n' 
+
+        return doc if doc else description
 
     def _get_endpoint_name(self):
         if hasattr(settings, 'AUTODOCS_ENDPOINT_NAMES') and settings.AUTODOCS_ENDPOINT_NAMES == 'view':
@@ -78,13 +114,13 @@ class Endpoint:
                 self.filter_backends.append((f.__name__, getdoc(f)))
 
     def _get_allowed_methods(self):
-         methods = []
-        if hasattr(self.view, 'cls'):
+        methods = []
+        if hasattr(self.view, 'actions'):
+            methods = [m.upper() for m in self.view.actions.keys()]
+        elif hasattr(self.view.cls, 'allowed_methods'):
+            # TODO: Check for View based route
             methods = [m.upper() for m in self.view.cls.http_method_names if hasattr(self.view.cls, m)]
 
-        if len(methods) and hasattr(self.view, 'actions'):
-            methods = [m.upper() for m in self.view.actions.keys()]
-            print(methods)
         return methods
 
     @staticmethod
@@ -98,7 +134,9 @@ class Endpoint:
                 regex = str(pattern.pattern)
         except:
             regex = ""
-        return prefix + simplify_regex(regex)
+
+        complete_path = '%s/%s' % (prefix.rstrip('/'), simplify_regex(regex).lstrip('/'))
+        return complete_path
 
     def _get_serializer_fields(self, serializer):
         fields = []
