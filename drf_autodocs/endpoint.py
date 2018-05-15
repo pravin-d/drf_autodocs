@@ -15,6 +15,8 @@ class Endpoint:
         self.id = Endpoint.counter
         self.header_regex = re.compile('^[a-zA-Z][0-9A-Za-z_]*:')
         self.extra_method = False
+        self.input_fields_text = ''
+        self.output_fields_text = ''
         Endpoint.counter += 1
 
         self.pattern = pattern
@@ -56,16 +58,12 @@ class Endpoint:
         else :
             description = self.get_view_description(self.view.cls, 'req_res_autodocs')
 
-        sections = self._parse_docs_to_map(description, self.header_regex)
-        if not set(self.methods) == {'GET', 'OPTIONS'}:
-            self.input_fields_text = ''
-            for method in self.methods:
+        sections = self._parse_docs_to_map(description, self.header_regex)  
+        for method in self.methods:
+            if method.lower() + '_req' in sections:
                 self.input_fields_text += method.upper() + '\n' + sections[method.lower() + '_req']
-        else:
-            self.output_fields_text = ''
-            for method in self.methods:
-                self.output_fields_text += method.upper() + '\n' + sections[method.lower() + '_req']
-        
+            if method.lower() + '_res' in sections:
+                self.output_fields_text += method.upper() + '\n' + sections[method.lower() + '_res']
 
     def _parse_docs_to_map(self, doc, regex) :
         lines = [line for line in doc.splitlines()]
@@ -83,7 +81,7 @@ class Endpoint:
         """
         Get the doc string from either cls or function, parse it and return
         """
-        description = getattr(obj, "__doc__", "No description provided by developer")
+        description = getattr(obj, attr, "No description provided by developer")
         description = formatting.dedent(smart_text(description))
         if html:
             return formatting.markup_description(description)
