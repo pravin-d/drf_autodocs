@@ -194,3 +194,10 @@ body {
 .tab-content {
     background: #360066 !important;
 }
+
+/* materialize css */
+.right {
+    margin-left: auto;
+}
+
+
